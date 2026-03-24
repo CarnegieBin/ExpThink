@@ -44,6 +44,36 @@ from verl.trainer.ppo.ray_trainer import (
 )
 from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
 
+# ── Monkey-patch DataProto.concat ────────────────────────────────────────────
+# When enable_chunked_prefill=True, different DP workers may pad generated
+# sequences to slightly different lengths. The original concat crashes with:
+#   "Sizes of tensors must match except in dimension 0"
+# This patch aligns sequence-length dims (dim≥1) across all shards before cat.
+_orig_dataproto_concat = DataProto.concat
+
+@staticmethod
+def _patched_dataproto_concat(data):
+    if data and data[0].batch is not None:
+        all_keys = list(data[0].batch.keys())
+        for key in all_keys:
+            tensors = [d.batch[key] for d in data]
+            shapes = [t.shape for t in tensors]
+            # Only act when shapes differ beyond dim 0
+            if len(set(s[1:] for s in shapes)) > 1:
+                ndim = tensors[0].ndim
+                max_sizes = [max(s[dim] for s in shapes) for dim in range(ndim)]
+                for d, t in zip(data, tensors):
+                    if list(t.shape) != max_sizes:
+                        # Build F.pad args: (last_dim_left, last_dim_right, ..., dim1_left, dim1_right)
+                        pad_args = []
+                        for dim in range(ndim - 1, 0, -1):
+                            pad_args.extend([0, max_sizes[dim] - t.shape[dim]])
+                        d.batch[key] = torch.nn.functional.pad(t, pad_args, value=0)
+    return _orig_dataproto_concat(data)
+
+DataProto.concat = _patched_dataproto_concat
+# ─────────────────────────────────────────────────────────────────────────────
+
 
 def compute_grpo_outcome_advantage(token_level_rewards: torch.Tensor,
                                    response_mask: torch.Tensor,

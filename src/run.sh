@@ -25,6 +25,7 @@ python3 -m src.main_dapo \
     data.max_prompt_length=1024 \
     data.max_response_length=4096 \
     data.gen_batch_size=256 \
+    data.filter_overlong_prompts=True \
     data.train_batch_size=512 \
     actor_rollout_ref.rollout.n=16 \
     algorithm.adv_estimator=grpo \
