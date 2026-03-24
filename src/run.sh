@@ -13,7 +13,7 @@ export TRAIN_FILE="${data_root}/deepscaler_filter.parquet"
 
 export TEST_FILE="['${data_root}/aime_16.parquet']"
 
-export CKPTS_DIR="./ckpts/${PROJECT_NAME}/${EXP_NAME}"
+export CKPTS_DIR="/home/work/tcbian/ExpThink/ckpts/${PROJECT_NAME}/${EXP_NAME}"
 
 
 # Train over a single node, 4 A800-80GB GPUs.
@@ -23,9 +23,8 @@ python3 -m src.main_dapo \
     data.prompt_key=prompt \
     data.truncation='left' \
     data.max_prompt_length=1024 \
-    data.max_response_length=4096 \
+    data.max_response_length=16384 \
     data.gen_batch_size=256 \
-    data.filter_overlong_prompts=True \
     data.train_batch_size=512 \
     actor_rollout_ref.rollout.n=16 \
     algorithm.adv_estimator=grpo \
@@ -59,7 +58,7 @@ python3 -m src.main_dapo \
     actor_rollout_ref.actor.ulysses_sequence_parallel_size=1 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.85 \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
-    +actor_rollout_ref.rollout.eot_token_id=151649 \
+    actor_rollout_ref.rollout.max_model_len=17408 \
     actor_rollout_ref.rollout.enable_chunked_prefill=True \
     actor_rollout_ref.rollout.max_num_batched_tokens=20000 \
     actor_rollout_ref.rollout.temperature=1 \

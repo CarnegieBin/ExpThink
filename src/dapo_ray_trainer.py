@@ -522,6 +522,7 @@ class RayDAPOTrainer(RayPPOTrainer):
         batch = None
         num_prompt_in_batch = 0
         num_gen_batches = 0
+        _traj_buffer: list = []  # accumulates trajectories across sub-batches for one training step
         print("Starting training loop...")
         for epoch in range(self.config.trainer.total_epochs):
             print("Starting epoch {}".format(epoch))
@@ -611,7 +612,6 @@ class RayDAPOTrainer(RayPPOTrainer):
                             reward_tensor = self.reward_fn(new_batch)
                             reward_extra_infos_dict = {}
 
-                        print(f'{list(reward_extra_infos_dict.keys())=}')
                         if reward_extra_infos_dict:
                             new_batch.non_tensor_batch.update({
                                 k: np.array(v) for k, v in reward_extra_infos_dict.items()
@@ -629,48 +629,31 @@ class RayDAPOTrainer(RayPPOTrainer):
                             new_batch.batch['token_level_rewards'] = new_batch.batch['token_level_scores']
                         # exit(0)
 
-                    # ---- Save training trajectories (with scores) for this step ----
+                    # ---- Accumulate training trajectories into buffer (all sub-batches) ----
                     if _train_inputs and hasattr(self, '_traj_log_base_dir'):
                         try:
                             # new_batch has repeated rows (rollout.n copies per prompt).
-                            # Use the original pre-repeat count to align with _train_inputs/_train_outputs.
                             _n_orig = len(_train_inputs)
                             _n_repeat = self.config.actor_rollout_ref.rollout.n
-                            # Collect scores from new_batch; shape: (n_orig * n_repeat,)
                             _all_scores = new_batch.batch['token_level_scores'].sum(dim=-1).cpu().tolist()
-                            # Build per-prompt list of (output, score) across rollout samples
-                            _traj_inputs_expanded = []
-                            _traj_outputs_expanded = []
-                            _traj_scores_expanded = []
-                            _extra_traj: dict[str, list] = defaultdict(list)
 
                             for orig_i in range(_n_orig):
                                 for rep_j in range(_n_repeat):
                                     flat_idx = orig_i * _n_repeat + rep_j
-                                    _traj_inputs_expanded.append(_train_inputs[orig_i])
-                                    # Decode from new_batch responses (already repeated & unioned)
+                                    inp = _train_inputs[orig_i]
                                     try:
                                         resp_ids = new_batch.batch['responses'][flat_idx]
-                                        _traj_outputs_expanded.append(
-                                            self.tokenizer.decode(resp_ids, skip_special_tokens=True))
+                                        out = self.tokenizer.decode(resp_ids, skip_special_tokens=True)
                                     except Exception:
-                                        _traj_outputs_expanded.append(
-                                            _train_outputs[orig_i] if orig_i < len(_train_outputs) else "")
-                                    _traj_scores_expanded.append(
-                                        _all_scores[flat_idx] if flat_idx < len(_all_scores) else 0.0)
-                                    for ek, ev in reward_extra_infos_dict.items():
-                                        _extra_traj[ek].append(ev[flat_idx] if flat_idx < len(ev) else None)
-
-                            self._save_trajectories(
-                                split="train",
-                                step=self.global_steps,
-                                inputs=_traj_inputs_expanded,
-                                outputs=_traj_outputs_expanded,
-                                scores=_traj_scores_expanded,
-                                extra=dict(_extra_traj) if _extra_traj else None,
-                            )
+                                        out = _train_outputs[orig_i] if orig_i < len(_train_outputs) else ""
+                                    sc = _all_scores[flat_idx] if flat_idx < len(_all_scores) else 0.0
+                                    extra_fields = {
+                                        ek: (ev[flat_idx] if flat_idx < len(ev) else None)
+                                        for ek, ev in reward_extra_infos_dict.items()
+                                    }
+                                    _traj_buffer.append({"input": inp, "output": out, "score": sc, **extra_fields})
                         except Exception as _e:
-                            print(f"[TrajectoryLog] Warning: failed to save train trajectories at step "
+                            print(f"[TrajectoryLog] Warning: failed to accumulate train trajectories at step "
                                   f"{self.global_steps}: {_e}")
 
                     if not self.config.algorithm.filter_groups.enable:
@@ -783,6 +766,25 @@ class RayDAPOTrainer(RayPPOTrainer):
                             traj_bsz = self.config.data.train_batch_size * self.config.actor_rollout_ref.rollout.n
                             batch = batch[:traj_bsz]
 
+                    # ---- Flush all accumulated trajectories to disk for this step ----
+                    if _traj_buffer and hasattr(self, '_traj_log_base_dir'):
+                        try:
+                            out_path = os.path.join(self._traj_log_base_dir, "train",
+                                                     f"step_{self.global_steps:06d}.jsonl")
+                            with open(out_path, "w", encoding="utf-8") as _f:
+                                for _i, _rec in enumerate(_traj_buffer):
+                                    _record = {"step": self.global_steps, "idx": _i,
+                                               "input": _rec.pop("input"),
+                                               "output": _rec.pop("output"),
+                                               "score": _rec.pop("score"),
+                                               **_rec}
+                                    _f.write(json.dumps(_record, ensure_ascii=False) + "\n")
+                            print(f"[TrajectoryLog] Saved {len(_traj_buffer)} trajectories "
+                                  f"({num_gen_batches} sub-batches) → {out_path}")
+                        except Exception as _e:
+                            print(f"[TrajectoryLog] Warning: failed to flush train trajectories at step "
+                                  f"{self.global_steps}: {_e}")
+
                     # balance the number of valid tokens on each dp rank.
                     # Note that this breaks the order of data inside the batch.
                     # Please take care when you implement group based adv computation such as GRPO and rloo
@@ -834,7 +836,7 @@ class RayDAPOTrainer(RayPPOTrainer):
 
                     # validate
                     if self.global_steps < 240:
-                        test_freq = 10
+                        test_freq = 1
                         save_freq = 10
                     else:
                         test_freq = self.config.trainer.test_freq
@@ -864,6 +866,7 @@ class RayDAPOTrainer(RayPPOTrainer):
                 batch = None
                 num_prompt_in_batch = 0
                 num_gen_batches = 0
+                _traj_buffer = []  # reset for next step
 
 
                 logger.log(data=metrics, step=self.global_steps)

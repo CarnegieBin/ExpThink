@@ -223,7 +223,7 @@ class vLLMRollout(BaseRollout):
                 'n': 1  # if greedy, only 1 response
             }
         elif is_validate:
-            # TODO: try **
+            print(f"Start to Validate with max_tokens: {self.config.val_kwargs.max_tokens}")
             kwargs = {
                 'top_k': self.config.val_kwargs.top_k,
                 'top_p': self.config.val_kwargs.top_p,
@@ -247,8 +247,11 @@ class vLLMRollout(BaseRollout):
                 for sample_id in range(len(output.outputs)):
                     response.append(output.outputs[sample_id].token_ids)
 
+            pad_max_length = (self.config.val_kwargs.max_tokens
+                              if is_validate and hasattr(self.config, 'val_kwargs')
+                              else self.config.response_length)
             response = pad_2d_list_to_length(response, self.pad_token_id,
-                                             max_length=self.config.response_length).to(idx.device)
+                                             max_length=pad_max_length).to(idx.device)
 
             if self.sampling_params.n > 1 and do_sample:
                 idx = _repeat_interleave(idx, self.sampling_params.n)

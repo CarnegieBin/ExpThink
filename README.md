@@ -1,1 +1,8 @@
-这个是我老版本的代码，是我上一论文的代码，直接可以运行脚本src目录下的run.sh即可，参数注意修改
+# ExpThink
+
+
+## 启动命令，一定要在ExpThink目录下，并且修改相关参数
+
+```bash
+    python src/run.sh
+```
