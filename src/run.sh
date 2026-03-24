@@ -17,7 +17,7 @@ export CKPTS_DIR="./ckpts/${PROJECT_NAME}/${EXP_NAME}"
 
 
 # Train over a single node, 4 A800-80GB GPUs.
-python3 -m verify.main_dapo \
+python3 -m src.main_dapo \
     data.train_files="${TRAIN_FILE}" \
     data.val_files="${TEST_FILE}" \
     data.prompt_key=prompt \
