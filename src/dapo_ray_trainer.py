@@ -588,17 +588,6 @@ class RayDAPOTrainer(RayPPOTrainer):
                             })
                         new_batch.batch['token_level_scores'] = reward_tensor
 
-                        # 新增验证阶段代码
-                        if self.config.get("verify", False):
-                            print("Starting verify batch ...")
-                            new_batch.meta_info['is_verify'] = True
-                            new_batch = self.actor_rollout_wg.generate_sequences(new_batch)
-                            # try:
-                            verify_reward_tensor = self.reward_fn(new_batch, is_verify=True, reward_tensor=reward_tensor)
-                            new_batch.batch['token_level_scores'] = verify_reward_tensor
-                            # except Exception as e:
-                            #     print(f'Error in reward_fn: {e}')
-
                         # compute rewards. apply_kl_penalty if available
                         if self.config.algorithm.use_kl_in_reward:
                             new_batch, kl_metrics = apply_kl_penalty(new_batch,
