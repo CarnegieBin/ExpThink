@@ -835,12 +835,8 @@ class RayDAPOTrainer(RayPPOTrainer):
                         metrics.update(actor_output_metrics)
 
                     # validate
-                    if self.global_steps < 240:
-                        test_freq = 1
-                        save_freq = 10
-                    else:
-                        test_freq = self.config.trainer.test_freq
-                        save_freq = self.config.trainer.save_freq
+                    test_freq = self.config.trainer.test_freq
+                    save_freq = self.config.trainer.save_freq
                     if self.val_reward_fn is not None and self.config.trainer.test_freq > 0 and \
                             (is_last_step or self.global_steps % test_freq == 0):
                         with _timer('testing', timing_raw):
