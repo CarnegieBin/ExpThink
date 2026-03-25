@@ -8,22 +8,23 @@ export PROJECT_NAME="ExpThink"
 export EXP_NAME="deepseek_llm_1.5b"
 export MODEL_PATH="/ssd2/llm_models/DeepSeek-R1-Distill-Qwen-1.5B"
 export data_root="./data"
-export TRAIN_FILE="${data_root}/deepscaler_filter.parquet"
-#export TEST_FILE="['${data_root}/aime_16.parquet','${data_root}/amc.parquet','${data_root}/math.parquet','${data_root}/minerva.parquet','${data_root}/olympiad.parquet']"
+export TRAIN_FILE="${data_root}/deepscaler.parquet"
+export TEST_FILE="['${data_root}/aime_16.parquet','${data_root}/amc.parquet','${data_root}/math.parquet','${data_root}/minerva.parquet','${data_root}/olympiad.parquet']"
 
-export TEST_FILE="['${data_root}/aime_16.parquet']"
+#export TEST_FILE="['${data_root}/aime_16.parquet']"
 
 export CKPTS_DIR="/home/work/tcbian/ExpThink/ckpts/${PROJECT_NAME}/${EXP_NAME}"
 
 
 # Train over a single node, 4 A800-80GB GPUs.
 python3 -m src.main_dapo \
+    +reward_model.q_ratio=0.1 \
     data.train_files="${TRAIN_FILE}" \
     data.val_files="${TEST_FILE}" \
     data.prompt_key=prompt \
     data.truncation='left' \
     data.max_prompt_length=1024 \
-    data.max_response_length=16384 \
+    data.max_response_length=4096 \
     data.gen_batch_size=256 \
     data.train_batch_size=512 \
     actor_rollout_ref.rollout.n=16 \
@@ -82,7 +83,6 @@ python3 -m src.main_dapo \
     trainer.test_freq=1 \
     trainer.save_freq=5 \
     trainer.total_epochs=10 \
-    trainer.default_local_dir="${CKPT_DIR}" \
     trainer.resume_mode=auto \
     custom_reward_function.path="./src/custom_think_rm.py" \
     custom_reward_function.name="verify_think_rm" \

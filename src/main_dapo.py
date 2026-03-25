@@ -145,7 +145,8 @@ class TaskRunner:
         reward_fn = reward_manager_cls(tokenizer=tokenizer,
                                        num_examine=0,
                                        compute_score=compute_score,
-                                       is_train=True)
+                                       is_train=True,
+                                       q_ratio=config.reward_model.q_ratio)
 
         # Note that we always use function-based RM for validation
         val_reward_fn = reward_manager_cls(tokenizer=tokenizer,
