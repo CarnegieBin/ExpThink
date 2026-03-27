@@ -5,7 +5,9 @@ export HYDRA_FULL_ERROR=1
 
 
 export PROJECT_NAME="ExpThink"
-export EXP_NAME="deepseek_llm_1.5b"
+export q_ratio=0.3
+export max_response_length=6144
+export EXP_NAME="deepseek_llm_1.5b-max_token-${max_response_length}-q_ratio-${q_ratio}"
 export MODEL_PATH="/ssd2/llm_models/DeepSeek-R1-Distill-Qwen-1.5B"
 export data_root="./data"
 export TRAIN_FILE="${data_root}/deepscaler.parquet"
@@ -18,13 +20,13 @@ export CKPTS_DIR="/home/work/tcbian/ExpThink/ckpts/${PROJECT_NAME}/${EXP_NAME}"
 
 # Train over a single node, 4 A800-80GB GPUs.
 python3 -m src.main_dapo \
-    +reward_model.q_ratio=0.1 \
+    +reward_model.q_ratio=${q_ratio} \
     data.train_files="${TRAIN_FILE}" \
     data.val_files="${TEST_FILE}" \
     data.prompt_key=prompt \
     data.truncation='left' \
     data.max_prompt_length=1024 \
-    data.max_response_length=4096 \
+    data.max_response_length=${max_response_length} \
     data.gen_batch_size=256 \
     data.train_batch_size=512 \
     actor_rollout_ref.rollout.n=16 \
@@ -80,8 +82,8 @@ python3 -m src.main_dapo \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.val_before_train=True \
-    trainer.test_freq=1 \
-    trainer.save_freq=5 \
+    trainer.test_freq=10 \
+    trainer.save_freq=10 \
     trainer.total_epochs=10 \
     trainer.resume_mode=auto \
     custom_reward_function.path="./src/custom_think_rm.py" \
