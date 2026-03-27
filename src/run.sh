@@ -21,6 +21,7 @@ export CKPTS_DIR="/home/work/tcbian/ExpThink/ckpts/${PROJECT_NAME}/${EXP_NAME}"
 # Train over a single node, 4 A800-80GB GPUs.
 python3 -m src.main_dapo \
     +reward_model.q_ratio=${q_ratio} \
+    +trainer.credit=True \
     data.train_files="${TRAIN_FILE}" \
     data.val_files="${TEST_FILE}" \
     data.prompt_key=prompt \

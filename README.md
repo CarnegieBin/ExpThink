@@ -46,17 +46,17 @@ bash src/run.sh
 
 ### 常用训练参数（按需调整）
 
-| 参数 | 位置 | 说明 |
-|---|---|---|
-| `trainer.n_gpus_per_node` | run.sh | 每节点 GPU 数量，默认 `8` |
-| `trainer.nnodes` | run.sh | 节点数，单机填 `1` |
-| `trainer.total_epochs` | run.sh | 总训练轮次，默认 `10` |
-| `trainer.test_freq` | run.sh | 每隔多少步做一次验证，默认 `10` |
-| `trainer.save_freq` | run.sh | 每隔多少步保存一次 checkpoint，默认 `10` |
-| `data.train_batch_size` | run.sh | 训练全局 batch size，默认 `512` |
-| `data.gen_batch_size` | run.sh | 生成 batch size，默认 `256` |
-| `actor_rollout_ref.actor.optim.lr` | run.sh | 学习率，默认 `1e-6` |
-| `actor_rollout_ref.rollout.gpu_memory_utilization` | run.sh | vLLM 显存占用比例，默认 `0.85` |
+| 参数                                                 | 位置 | 说明                           |
+|----------------------------------------------------|---|------------------------------|
+| `reward.q_ratio`                                   | run.sh | 经验压缩的超参数，默认 `0.3`            |
+| `trainer.credit`                                   | run.sh | 是否采用前缀掩码，鼓励探索，默认是 `true`     |
+| `trainer.max_response_length`                      | run.sh | 回答轨迹的最大长度，默认 `6144`          |
+| `trainer.test_freq`                                | run.sh | 每隔多少步做一次验证，默认 `10`           |
+| `trainer.save_freq`                                | run.sh | 每隔多少步保存一次 checkpoint，默认 `10` |
+| `data.train_batch_size`                            | run.sh | 训练全局 batch size，默认 `512`     |
+| `data.gen_batch_size`                              | run.sh | 生成 batch size，默认 `256`       |
+| `actor_rollout_ref.actor.optim.lr`                 | run.sh | 学习率，默认 `1e-6`                |
+| `actor_rollout_ref.rollout.gpu_memory_utilization` | run.sh | vLLM 显存占用比例，默认 `0.85`        |
 
 ---
 

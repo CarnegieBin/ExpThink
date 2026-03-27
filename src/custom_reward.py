@@ -23,6 +23,7 @@ from typing import TypedDict
 class _ExperienceEntry(TypedDict):
     length: int
     response: str
+    response_ids: list  # token id 列表，用于前缀匹配
 
 
 class CustomRewardManager:
@@ -144,6 +145,7 @@ class CustomRewardManager:
             sample_resp_len: dict[int, int] = {}
             sample_resp_str: dict[int, str] = {}
             sample_prompt_str: dict[int, str] = {}
+            sample_resp_ids: dict[int, torch.Tensor] = {}  # 用于前缀 mask 的 token id
 
             for i in range(len(data)):
                 data_item = data[i]  # DataProtoItem
@@ -200,6 +202,7 @@ class CustomRewardManager:
                 sample_resp_len[i] = valid_response_length
                 sample_resp_str[i] = response_str
                 sample_prompt_str[i] = prompt_str
+                sample_resp_ids[i] = valid_response_ids  # 缓存 token ids，用于前缀比较
 
                 # ===== 先正常写 reward（后面可能被覆盖为 0）=====
                 reward_tensor[i, valid_response_length - 1] = score
@@ -221,6 +224,8 @@ class CustomRewardManager:
             # =====================================================================
             # 第二阶段：按 uid 做组内规则修正（experience_box 动态截断）
             # =====================================================================
+            prefix_mask_len_list = [0] * len(data)  # 每条轨迹的前缀 mask 长度，默认 0
+
             for uid, indices in uid_to_indices.items():
                 # 1. 找出本组内最短的正确轨迹
                 correct_indices = [i for i in indices if sample_correct[i]]
@@ -230,16 +235,18 @@ class CustomRewardManager:
                     best_resp = sample_resp_str[best_i]
                     prompt_key = sample_prompt_str[best_i]
 
-                    # 2. 更新 experience_box
+                    # 2. 更新 experience_box（同时保存 response_ids 用于前缀比较）
                     if prompt_key not in CustomRewardManager.experience_box:
                         CustomRewardManager.experience_box[prompt_key] = {
                             "length": best_len,
                             "response": best_resp,
+                            "response_ids": sample_resp_ids[best_i].tolist(),
                         }
                     elif best_len < CustomRewardManager.experience_box[prompt_key]["length"]:
                         CustomRewardManager.experience_box[prompt_key] = {
                             "length": best_len,
                             "response": best_resp,
+                            "response_ids": sample_resp_ids[best_i].tolist(),
                         }
 
                 # 3. 训练模式下，用 experience_box + q 做动态截断
@@ -251,6 +258,31 @@ class CustomRewardManager:
                         for i in indices:
                             if sample_correct[i] and sample_resp_len[i] > cutoff:
                                 _ = reward_tensor[i].zero_()
+
+                    # 4. 计算 reward=0 轨迹与最短正确轨迹的公共前缀长度（用于梯度 mask）
+                    #    以 experience_box 中的历史最短正确轨迹作为参考（最稳定）
+                    prompt_key = sample_prompt_str[indices[0]]
+                    ref_ids = None
+                    if prompt_key in CustomRewardManager.experience_box:
+                        entry = CustomRewardManager.experience_box[prompt_key]
+                        if "response_ids" in entry:
+                            ref_ids = torch.tensor(entry["response_ids"], dtype=torch.long)
+
+                    if ref_ids is not None:
+                        for i in indices:
+                            if reward_tensor[i].sum().item() == 0:
+                                traj_ids = sample_resp_ids[i]
+                                min_len = min(len(ref_ids), len(traj_ids))
+                                common = 0
+                                for j in range(min_len):
+                                    if traj_ids[j].item() == ref_ids[j].item():
+                                        common += 1
+                                    else:
+                                        break
+                                prefix_mask_len_list[i] = common
+
+            # 将前缀 mask 长度加入 reward_extra_info，供 compute_advantage 使用
+            reward_extra_info["prefix_mask_len"] = prefix_mask_len_list
 
             # =====================================================================
 

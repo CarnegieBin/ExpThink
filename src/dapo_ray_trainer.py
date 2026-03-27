@@ -78,7 +78,8 @@ DataProto.concat = _patched_dataproto_concat
 def compute_grpo_outcome_advantage(token_level_rewards: torch.Tensor,
                                    response_mask: torch.Tensor,
                                    index: np.ndarray,
-                                   epsilon: float = 1e-6):
+                                   epsilon: float = 1e-6,
+                                   prefix_mask_len: np.ndarray = None):
     """
     Compute advantage for GRPO, operating only on Outcome reward
     (with only one scalar reward for each response).
@@ -87,6 +88,10 @@ def compute_grpo_outcome_advantage(token_level_rewards: torch.Tensor,
             shape: (bs, response_length)
         response_mask: `(torch.Tensor)`
             shape: (bs, response_length)
+        prefix_mask_len: `(np.ndarray)` optional
+            shape: (bs,)  每条轨迹需要 mask 掉的前缀 token 数量。
+            仅对 reward=0 的轨迹生效：将其 advantage 中与最短正确轨迹
+            共享的前缀部分置 0，不对该段施加负梯度。
 
     Returns:
         advantages: `(torch.Tensor)`
@@ -117,6 +122,17 @@ def compute_grpo_outcome_advantage(token_level_rewards: torch.Tensor,
             scores[i] = (scores[i] - id2mean[index[i]]) / (id2std[index[i]] + epsilon)
         scores = scores.unsqueeze(-1) * response_mask
 
+        # ── 前缀梯度 mask（credit assignment 分支）────────────────────────────
+        # 对 reward=0 的轨迹，其归一化 advantage 为负值（组内有正例时均值>0）。
+        # 若该轨迹前 prefix_mask_len[i] 个 token 与最短正确轨迹一致，
+        # 则这段前缀属于"已验证的正确推理"，不应承受负梯度，置 0。
+        if prefix_mask_len is not None:
+            for i in range(bsz):
+                pml = int(prefix_mask_len[i])
+                if pml > 0:
+                    scores[i, :pml] = 0.0
+        # ─────────────────────────────────────────────────────────────────────
+
     return scores, scores
 
 
@@ -127,16 +143,22 @@ def compute_response_mask(data: DataProto):
     return attention_mask[:, -response_length:]
 
 
-def compute_advantage(data: DataProto, adv_estimator, gamma=1.0, lam=1.0, num_repeat=1):
+def compute_advantage(data: DataProto, adv_estimator, gamma=1.0, lam=1.0, num_repeat=1, credit=False):
     # Back-compatible with trainers that do not compute response mask in fit
     if "response_mask" not in data.batch.keys():
         data.batch['response_mask'] = compute_response_mask(data)
     # prepare response group
 
+    # 当 credit=True 且 reward 计算阶段已写入 prefix_mask_len 时，启用前缀梯度 mask
+    prefix_mask_len = None
+    if credit and 'prefix_mask_len' in data.non_tensor_batch:
+        prefix_mask_len = data.non_tensor_batch['prefix_mask_len']
+
     advantages, returns = compute_grpo_outcome_advantage(
         token_level_rewards=data.batch['token_level_rewards'],
         response_mask=data.batch['response_mask'],
-        index=data.non_tensor_batch['uid'])
+        index=data.non_tensor_batch['uid'],
+        prefix_mask_len=prefix_mask_len)
     data.batch['advantages'] = advantages
     data.batch['returns'] = returns
 
@@ -816,11 +838,14 @@ class RayDAPOTrainer(RayPPOTrainer):
 
                     with _timer('adv', timing_raw):
                         # compute advantages, executed on the driver process
+                        if self.config.get('credit', False):
+                            print("Mask prefix token gradient:")
                         batch = compute_advantage(batch,
                                                   adv_estimator=self.config.algorithm.adv_estimator,
                                                   gamma=self.config.algorithm.gamma,
                                                   lam=self.config.algorithm.lam,
-                                                  num_repeat=self.config.actor_rollout_ref.rollout.n)
+                                                  num_repeat=self.config.actor_rollout_ref.rollout.n,
+                                                  credit=self.config.get('credit', False))
 
                     # update critic
                     if self.use_critic:
