@@ -5,7 +5,7 @@ export HYDRA_FULL_ERROR=1
 
 
 export PROJECT_NAME="ExpThink"
-export q_ratio=0.3
+export q_ratio=0.1
 export max_response_length=16384
 export EXP_NAME="deepseek_llm_1.5b-max_token-${max_response_length}-q_ratio-${q_ratio}"
 export MODEL_PATH="/ssd2/llm_models/DeepSeek-R1-Distill-Qwen-1.5B"
