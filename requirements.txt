@@ -13,10 +13,10 @@ pyarrow>=15.0.0
 pybind11
 pylatexenc
 pylint==3.3.6
-ray[default]
+ray[default]==2.46.0  # pin to match machine A; adjust version as needed
 tensordict<=0.6.2
 torchdata
 transformers==4.51.2
-vllm==0.8.5
+vllm==0.8.5.post1
 swanlab
 jsonlines
