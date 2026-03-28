@@ -6,12 +6,12 @@ export HYDRA_FULL_ERROR=1
 
 export PROJECT_NAME="ExpThink"
 export q_ratio=0.3
-export max_response_length=6144
+export max_response_length=16384
 export EXP_NAME="deepseek_llm_1.5b-max_token-${max_response_length}-q_ratio-${q_ratio}"
 export MODEL_PATH="/ssd2/llm_models/DeepSeek-R1-Distill-Qwen-1.5B"
 export data_root="./data"
 export TRAIN_FILE="${data_root}/deepscaler.parquet"
-export TEST_FILE="['${data_root}/aime_16.parquet','${data_root}/amc.parquet','${data_root}/math.parquet','${data_root}/minerva.parquet','${data_root}/olympiad.parquet']"
+export TEST_FILE="['${data_root}/aime_16.parquet','${data_root}/amc_8.parquet','${data_root}/math.parquet','${data_root}/minerva.parquet','${data_root}/olympiad.parquet']"
 
 #export TEST_FILE="['${data_root}/aime_16.parquet']"
 
@@ -40,7 +40,7 @@ python3 -m src.main_dapo \
     actor_rollout_ref.actor.clip_ratio_high=0.28 \
     actor_rollout_ref.actor.clip_ratio_c=10.0 \
     algorithm.filter_groups.enable=True \
-    algorithm.filter_groups.metric="seq_final_reward" \
+    algorithm.filter_groups.metric="acc" \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.ref.log_prob_use_dynamic_bsz=True \
